@@ -88,7 +88,7 @@ dd_energy *= efficiency
 pb_energy *= efficiency
 
 # Density
-n = 1e20  # paricles per m3
+n = density  # paricles per m3
 
 # Energy per reaction (Joules)
 E_DT = 17.6e6 * 1.602e-19
@@ -98,13 +98,11 @@ E_PB = 8.7e6 * 1.602e-19
 # Temperature in keV for full range
 T_keV_curve = temperatures / 11.6
 
-# Radiation losses 
-radiation_loss = 1e-37 * n**2 * np.sqrt(T_keV_curve)
 
 # Plasma composition 
 fuel_mix = float(input("Enter Fuel mix (0-1). "))
 
-total_energy = (fuel_mix * dt_energy * (1 - fuel_mix) * dd_energy)
+total_energy = fuel_mix * dt_energy + (1 - fuel_mix) * dd_energy
 
  
 
@@ -126,8 +124,6 @@ elif ntau >= LAWSON_DT:
     print ("Fusion possible, but temperature not optimal")
 else: 
     print ("Fusion not achieved") 
-print (f"Radiation loss min:{radiation_loss.min():.3e}")
-print (f"Radiation loss max:{radiation_loss.max():.3e}")
 print ("\n===Power Balance===")
 print (f"Fusion power: {total_energy:.3e}")
 radiation_loss_point = 1e-37 * n**2 * np.sqrt(T_keV)
@@ -145,12 +141,19 @@ pb_rates = np.array([reactivity_saddle(T, *pb_params) for T in T_keV_curve])
 print ("dt_rates min:", dt_rates.min())
 print ("dt_rates max:", dt_rates.max())
 
+# Power Curves
 dt_power = n**2 * dt_rates * E_DT
 dd_power = n**2 * dd_rates * E_DD
 pb_power = n**2 * pb_rates * E_PB
 
+# Total Fusion Power
 total_power = dt_power + dd_power + pb_power
-net_power = total_power - radiation_loss 
+
+# Radiation Loss Curve
+radiation_curve = 1e-37 * density**2 * np.sqrt(T_keV_curve)
+
+# Net Power
+net_power = total_power - radiation_curve 
 
 # Energy curves
 dt_energy_curve = dt_rates * density**2 * confinement_time * DT_ENERGY * MEV_TO_J * efficiency
@@ -160,21 +163,45 @@ pb_energy_curve = pb_rates * density**2 * confinement_time * PB_ENERGY * MEV_TO_
 # Temperature in keV for full range
 T_keV_curve = temperatures / 11.6
 
+
 # Convert keV to million C
 T_million_C = T_keV_curve * 11.6
 
-# Radiation loss curve
-radiation_curve = 1e-38 * density**2 * np.sqrt(T_keV_curve)
 
 # Total fusion (based on mix)
-fusion_total_curve = (dt_energy_curve + dd_energy_curve + pb_energy_curve) 
+fusion_total_curve = total_power 
 
 # Net power
 net_power_curve = fusion_total_curve - radiation_curve
 
-print ("n\=== DEBUG GET POWER ===")
-print ("Min net:", np.min(net_power_curve))
-print ("Max net:", np.max(net_power_curve))
+# ===== Q-Factor Calculation =====
+Q_curve = fusion_total_curve / (radiation_curve + 1e-30)
+
+user_index = np.argmin(np.abs(T_million_C - user_temp))
+Q_value = Q_curve[user_index]
+
+print ("\n=== Q-Factor ===")
+print (f"Q-factor at {user_temp:.1f} million C: {Q_value:.3f}")
+
+if Q_value < 1:
+    print ("Below break-even (Q< 1)")
+elif Q_value == 1:
+    print ("At break-even (Q = 1)")
+else:
+    print ("Net positive fusion (Q > 1)")
+
+# ===== Lawson Progress =====
+lawson_progress = (ntau / LAWSON_DT) * 100
+
+print ("\n=== Lawson Progress ===")
+print (f"Lawson Progress: {lawson_progress:.1f}%")
+
+if lawson_progress < 100: 
+    print ("Below Lawson Criterion")
+elif lawson_progress == 100:
+    print ("At Lawson Criterion")
+else:
+    print ("Beyond Lawson Criterion")
 
 # Plotting section
 plt.figure(figsize=(12, 7))
@@ -214,39 +241,73 @@ plt.grid()
 #===== Bottom Graph: Energy + Losses =====
 plt.subplot(2, 1, 2)
 
-# Fusion Energy Curves
-plt.plot(T_million_C, fusion_total_curve, label="Fusion Power", linewidth=2)
+# Fusion Power
+plt.plot(T_million_C, total_power, label="Fusion Power", linewidth=2)
 
 # Radiation Loss
 plt.plot(T_million_C, radiation_curve, "--", label="Radiation Loss", linewidth=2)
 
 # Net Power
-plt.plot(T_million_C, net_power_curve, linewidth=3, label="Net Power")
+plt.plot(T_million_C, net_power_curve, linewidth=3, label="Net Power", color="green")
 
-# Break even line
+# Extending y-limit
+plt.ylim(-3000000, max(fusion_total_curve) * 1.1)
+
+# Break even detection
 zero_index = np.where(np.diff(np.sign(net_power_curve)) !=0)[0]
 if len(zero_index) > 0:
     i = zero_index[0]
    
-    
-    x1, x2 = T_million_C[i], T_million_C[i+1]
-    y1, y2 = net_power_curve[i], net_power_curve[i+1]
+    # Interpolate better crossing point
+    x1 = temperatures[i]
+    x2 = temperatures[i + 1]
+
+    y1 = net_power_curve[i]
+    y2 = net_power_curve[i + 1]
+
     break_even_temp = x1 - y1 * (x2 - x1) / (y2 - y1)
  
-        
-    plt.axvline(break_even_temp, color='red', linestyle='--', linewidth=2)
-    y_position = net_power_curve[i]   
-    
-    plt.text(break_even_temp, y1, " Break-even", color='red', fontsize=10)
     print (f"Break-even at ~{break_even_temp:.2f} million C")
+
+    plt.axvline(break_even_temp,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label="Break-even")
+
+    plt.text(break_even_temp, 
+             max(fusion_total_curve) * 0.5,
+             "Break-even",
+             color="Red",
+             fontsize=10)
 else: 
     print ("No Break-even point found")
+
+# ===== Dashboard Summary Box =====
+if Q_value > 1:
+    status = "Below Break Even"
+elif Q_value < 2:
+    status = "Near Ignition"
+else:
+    status = "Net Positive Fusion"
+
+summary_text = (f"Break even: {break_even_temp:.1f}MC\n"
+                f"Lawson: {lawson_progress:.1f}%\n"
+                f"Status: {status}")
+
+plt.text( # x-position
+         210,
+         # y-position
+         -1500000, 
+         summary_text, 
+         fontsize=10,
+         bbox=dict(facecolor="white", alpha=0.85, edgecolor="black")) 
 
 # Axis + styling
 plt.xlim(0, max_temp)
 plt.axhline(0, linestyle=":", linewidth=1)
 plt.axvline(user_temp, linestyle=":", linewidth=1)
-plt.yscale("log")
+#plt.yscale("log")
 plt.xlabel("Temperature (million C)")
 plt.ylabel("Power")
 plt.title("Fusion Power vs Losses vs Net Output")
