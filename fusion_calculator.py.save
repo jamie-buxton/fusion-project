@@ -226,42 +226,10 @@ elif risk_score < 60:
 else:
    print ("High Risk")
 
-# Plasma Stability Score
+# ===== Plasma Stability Score =====
 print ("\n=== Plasma Stability Prediction ===")
 
 stability_score = 100
-
-# Q-factor impact
-if Q_value < 0.3:
-   stability_score -= 35
-elif Q_value < 0.7:
-   stability_score -= 20
-elif Q_value < 1.0:
-   stability_score -= 10
-
-# Lawson impact
-if lawson_progress < 100:
-   stability_score -= 30
-elif lawson_progress < 300:
-   stability_score -= 15
-
-# Risk score impact
-stability_score -= int(risk_score * 0.5)
-
-# Clamp score
-stability_score = max(0, min(100, stability_score))
-
-print ("Plasma Stability Score: {stability_score} 0/100")
-
-if stability_score >= 65:
-   plasma_status = "Stable Plasma"
-elif stability_score >= 40:
-   plasma_status = "Marginal Stability"
-else: 
-   plasma_status = "High Disruption Risk"
-
-print (plasma_status)
-
 # Plotting section
 plt.figure(figsize=(12, 7))
 
@@ -350,14 +318,6 @@ elif Q_value < 2:
 else:
     status = "Net Positive Fusion"
 
-# Plasma Status color
-if plasma_status == "Stable Plasma":
-   box_color = "green"
-elif plasma_status == "Marginal Stability":
-   box_color = "yellow"
-else:
-   box_color = "red"
-
 if len(zero_index) > 0:
    break_text = f"{break_even_temp:.1f} MC"
 else:
@@ -367,18 +327,15 @@ summary_text = (f"Break-even: {break_text}\n"
                 f"Q_factor: {Q_value:.2f}\n"
                 f"Lawson: {lawson_progress:.1f}%\n"
                 f"Risk Score: {risk_score}/100\n"
-                f"Plasma: {plasma_status}\n"
                 f"Status: {status}")
 
-plt.text(
-         0.98,                  # 98% across the plot
-         0.05,                  # 5% up from bottom 
-         summary_text,         
-         transform=plt.gca().transAxes,
+plt.text( # x-position
+         210,
+         # y-position
+         -1500000, 
+         summary_text, 
          fontsize=10,
-         ha="right",
-         va="bottom",
-         bbox=dict(facecolor=box_color, alpha=0.85, edgecolor="black")) 
+         bbox=dict(facecolor="white", alpha=0.85, edgecolor="black")) 
 
 # Axis + styling
 plt.xlim(0, max_temp)
