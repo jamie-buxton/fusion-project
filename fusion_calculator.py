@@ -25,8 +25,6 @@ ntau = density  * confinement_time
 
 LAWSON_DT = 1e20 * (10 / T_keV) 
 
-LAWSON_THRESHOLD = 1e21 # simplified
-
 # S-factor models
 
 def S_dt(T_keV):
@@ -142,7 +140,7 @@ pb_rates = np.array([reactivity_saddle(T, *pb_params) for T in T_keV_curve])
 # Power Curves
 dt_power = n**2 * dt_rates * E_DT
 dd_power = n**2 * dd_rates * E_DD
-pb_power = n**2 * pb_rates * E_PB
+pb_power = n**2 * pb_rates * E_PB # p-B11 reserved for future advanced fuel modelling
 
 # Total Fusion Power
 total_power = (fuel_mix * dt_power) + ((1 - fuel_mix) * dd_power)
@@ -157,10 +155,6 @@ net_power = total_power - radiation_curve
 dt_energy_curve = dt_rates * density**2 * confinement_time * DT_ENERGY * MEV_TO_J * efficiency
 dd_energy_curve = dd_rates * density**2 * confinement_time * DD_ENERGY * MEV_TO_J * efficiency
 pb_energy_curve = pb_rates * density**2 * confinement_time * PB_ENERGY * MEV_TO_J * efficiency
-
-# Temperature in keV for full range
-T_keV_curve = temperatures / 11.6
-
 
 # Convert keV to million C
 T_million_C = T_keV_curve * 11.6
@@ -226,10 +220,39 @@ elif risk_score < 60:
 else:
    print ("High Risk")
 
-# Plasma Stability Score
-print ("\n=== Plasma Stability Prediction ===")
-
 stability_score = 100
+
+
+# Q contribution (0-40)
+q_score = min(Q_value, 1.0) * 40
+
+# Lawson contribution (0-20)
+lawson_score = min(lawson_progress / 100, 1.0) * 20
+
+# Stability contribution (0-20)
+stability_component = (stability_score / 100) * 20
+
+# Risk contribution 
+risk_component = (100 - risk_score) / 100 * 20
+
+# Fusion Readiness Score
+fusion_readiness = (q_score + lawson_score + stability_component + risk_component)
+
+fusion_readiness = round(fusion_readiness, 1)
+
+print ("\n=== Fusion Readiness ===")
+print (f"Fusion Readiness Score: {fusion_readiness}/100")
+
+if fusion_readiness >= 80: 
+   readiness_status = "Near Commercial Fusion"
+elif fusion_readiness >= 60:
+   readiness_status = "Near Ignition"
+elif fusion_readiness >= 40:
+   readiness_status = "Promising Concept"
+else:
+   readiness_status = "Early Development"
+
+print (readiness_status)
 
 # Q-factor impact
 if Q_value < 0.3:
@@ -251,7 +274,7 @@ stability_score -= int(risk_score * 0.5)
 # Clamp score
 stability_score = max(0, min(100, stability_score))
 
-print ("Plasma Stability Score: {stability_score} 0/100")
+print (f"Plasma Stability Score: {stability_score} 0/100")
 
 if stability_score >= 65:
    plasma_status = "Stable Plasma"
@@ -260,7 +283,48 @@ elif stability_score >= 40:
 else: 
    plasma_status = "High Disruption Risk"
 
-print (plasma_status)
+# Plasma Stability Score
+print ("\n=== Plasma Stability Prediction ===")
+print (f"Plasma Stability Score: {stability_score}/100")
+print (f"status: {plasma_status}")
+
+#===== AI Optimisation Assistant ====
+print ("\n=== AI Optimisation Asssistant ===")
+
+if Q_value < 0.8:
+   print ("- Increase Confinement Time")
+elif Q_value < 1: 
+   print ("- Minor confinement improvements recommended")
+
+if lawson_progress < 100:
+   print ("- Increase Density")
+
+if risk_score > 60:
+   print ("- Reduce enginnering risk")
+
+if stability_score < 65: 
+   print ("- Improve plasma stability")
+
+# ===== Fusion Barrier Tracker =====
+print ("\n=== Fusion Barrier Tracker ===")
+
+plasma_barrier = stability_score
+
+net_energy_barrier = min(Q_value, 1.0) * 100
+
+confinement_barrier = min(lawson_progress, 100)
+
+# Engineering Barrier
+engineering_barrier = 100 - risk_score
+
+overall_barrier_progress = (plasma_barrier + net_energy_barrier + confinement_barrier + engineering_barrier) / 4
+
+print (f"Plasma Stability:{plasma_barrier}% solved")
+print (f"Net Energy Gain:{net_energy_barrier:.1f}% solved")
+print (f"Confinement:{confinement_barrier}% solved")
+print (f"Engineering:{engineering_barrier}% solved")
+
+print (f"\nOverall Fusion Progress:{overall_barrier_progress:.1f}%")
 
 # Plotting section
 plt.figure(figsize=(12, 7))
@@ -344,7 +408,7 @@ else:
 
 # ===== Dashboard Summary Box =====
 if Q_value < 1:
-    status = "Below Break Even"
+    status = "Below Break-Even"
 elif Q_value < 2:
     status = "Near Ignition"
 else:
@@ -359,14 +423,16 @@ else:
    box_color = "red"
 
 if len(zero_index) > 0:
-   break_text = f"{break_even_temp:.1f} MC"
+   break_text = f"{break_even_temp:.1f} Million C"
 else:
    break_text = "Not Reached"
 
-summary_text = (f"Break-even: {break_text}\n"
-                f"Q_factor: {Q_value:.2f}\n"
+summary_text = (f"Readiness: {fusion_readiness}/100\n"
+                f"Break-even: {break_text}\n"
+                f"Q-factor: {Q_value:.2f}\n"
                 f"Lawson: {lawson_progress:.1f}%\n"
                 f"Risk Score: {risk_score}/100\n"
+                f"Stability: {stability_score}/100\n"
                 f"Plasma: {plasma_status}\n"
                 f"Status: {status}")
 
